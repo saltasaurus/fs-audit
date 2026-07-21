@@ -76,7 +76,7 @@
   .tile small{font-family:var(--mono);color:rgba(10,13,18,0.65);font-size:11px}
   .tile:hover{filter:brightness(1.16);transform:scale(1.01);z-index:2}
 
-  .insights{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px}
   .insight{border-radius:16px;padding:20px;cursor:pointer;transition:border-color .13s,transform .13s;border:1px solid var(--b-card);background:var(--card)}
   .insight:hover{border-color:#2c3444;transform:translateY(-2px)}
   .chip{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}

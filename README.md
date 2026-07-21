@@ -1,94 +1,131 @@
-# fs-audit — Strata Storage Auditor
+# Strata
 
-A read-only filesystem auditor with a visual dashboard. Scans the directory
-roots you configure, then opens a single self-contained HTML report — the
-**Strata** dashboard — showing where your space goes, which files are exact
-content duplicates, and which are large. It never moves, deletes, renames, or
-modifies any file.
+**Find out where your disk space actually went.**
 
-Pure Python standard library. **No third-party dependencies**, no build step,
-no server.
+Strata scans the folders you point it at and opens a single self-contained HTML
+dashboard: what's eating your space, which files are byte-identical copies of
+each other, what's enormous, and what you haven't touched in years.
 
-## Run
+It never moves, deletes, renames, or modifies a single file. It only looks.
+
+Pure Python standard library — no dependencies, no build step, no server, and
+nothing ever leaves your machine.
+
+![Strata overview](docs/screenshots/overview.png)
+
+## Install and run
+
+You need Python 3.11 or newer. That's the whole list.
+
+```bash
+git clone https://github.com/saltasaurus/fs-audit.git
+cd fs-audit
+cp roots.example.txt roots.txt
+```
+
+Open `roots.txt` and list the folders you want scanned, one per line:
+
+```
+C:/Users/YourName/Documents/
+D:/Projects/
+/mnt/c/Users/YourName/          # WSL mount
+```
+
+Use forward slashes on every platform. Blank lines and `#` comments are ignored.
+Then:
 
 ```bash
 python main.py
 ```
 
-That's it. `main.py` scans the configured roots, writes
-`outputs/audit.html` with the scan data inlined, and opens it in your browser.
-Re-run any time to refresh.
+Strata scans, writes `outputs/audit.html`, and opens it in your browser. Re-run
+any time to refresh. A whole-profile scan takes a few minutes; most of that is
+hashing files that might be duplicates.
 
-## Configure
+> `roots.txt` is ignored by git, so your folder paths never end up in a commit.
 
-Copy `roots.example.txt` to `roots.txt` and list the directories to scan, one
-per line:
+## What you get
 
-```
-C:/Users/YourName/Documents/
-D:/Projects/
-/mnt/c/Users/YourName/
-```
+### Storage Map
 
-Blank lines and `#` comments are ignored. Use forward slashes on all platforms.
-`roots.txt` is git-ignored — your machine's paths stay out of the repo, and
-`config.py` can be edited or updated without ever touching them.
+A drill-down treemap of your entire folder tree. Tiles are sized by how much
+the folder holds and coloured by what's inside it. Click a tile to go deeper,
+use the breadcrumb to climb back out — you bottom out at the actual files.
 
-Optional knobs in `config.py`: `SKIP_PATHS` (substrings never traversed),
-`LARGE_FILE_BYTES` (default 1 GB), `OLD_FILE_DAYS` (default 365), and
-`CATEGORY_EXTENSIONS` (extension → category mapping).
+![Storage Map](docs/screenshots/storage-map.png)
 
-## Dashboard
+### Duplicates
 
-All five views are wired to live scan data:
+Files with **byte-identical content**, grouped into sets — matched by content
+hash, not by filename, so `invoice.pdf` and `invoice (1).pdf` are caught, and
+two different files that happen to share a name are not.
 
-- **Overview** — disk-usage donut, a treemap of your biggest top-level folders,
-  and headline duplicate / large-file / old-file numbers.
-- **Storage Map** — a drill-down treemap of the whole folder tree. Click a
-  folder tile to descend, use the breadcrumb to climb back. Tiles are sized by
-  subtree bytes and coloured by dominant category.
-- **Duplicates** — files with byte-identical content grouped into sets
-  (matched by content hash, not filename). Flag copies for review and export a
-  plain-text list. **Audit-only — nothing is ever deleted.**
-- **Large Files** — every file at or above the threshold, sortable and
-  searchable.
-- **Old & Unused** — files not modified in a while, with a slider (30–730 days)
-  and quick presets to change the age threshold live.
+Strata groups files by size first and only hashes the ones that share a size,
+because a file with a unique size can't possibly have a twin. That skips
+re-reading the overwhelming majority of your disk.
 
-"Last touched" age is based on file **modification time** — access time is
-unreliable (often disabled, or bumped by background scans and indexers).
+It also finds **near-duplicates** — drafts and edited copies whose text is
+similar but not identical. The copy in the shortest path is marked the
+recommended keeper. Tick the ones you don't want and export a plain-text list
+to act on yourself.
 
-## How duplicate detection works
+![Duplicates](docs/screenshots/duplicates.png)
 
-Files are grouped by size first; only files that share a size are hashed
-(SHA-256, streamed in chunks). A unique size can't be a duplicate, so the vast
-majority of files are never read a second time. Within each set the copy in the
-shortest path is marked the recommended keeper.
+### Old & Unused
 
-## Test
+Everything you haven't touched in a long time, with a live slider from 30 days
+to 2 years. Folders written in one go — a photo import, an old tax year —
+collapse into a single row instead of flooding the list with hundreds of files
+that all share a timestamp.
 
-```bash
-pytest
-```
+![Old & Unused](docs/screenshots/old-unused.png)
 
-## Layout
+### Empty & Junk
 
-```
-fs-audit/
-├── roots.txt            ← edit this (git-ignored; copy roots.example.txt)
-├── config.py            ← shipped tunables: thresholds, categories, skips
-├── scanner.py           ← single-pass read-only scan → data dict
-├── main.py              ← scan, inline into template, open in browser
-├── gui/template.html    ← the Strata dashboard (self-contained)
-├── tests/test_scanner.py
-└── outputs/             ← audit.html written here (git-ignored)
-```
+Empty folders, zero-byte files, and OS clutter (`Thumbs.db`, `.DS_Store`,
+`desktop.ini`). Only the outermost folder of an empty chain is listed, so one
+entry covers the whole dead branch. Folders that merely *look* empty because
+Strata skipped their contents are never flagged.
 
-## Constraints
+![Empty & Junk](docs/screenshots/empty-junk.png)
 
-- The only file ever written is `outputs/audit.html`.
+### Large Files
+
+Every file at or above 1 GB, sortable by name, category, size, or age, with
+search.
+
+## Nothing is ever deleted
+
+Strata is an auditor, not a cleaner. It shows you what to consider removing and
+leaves the removing to you.
+
+- The only file it ever writes is `outputs/audit.html`.
 - Symlinks are never followed.
-- Paths containing a `SKIP_PATHS` substring are never traversed.
+- Folders matching a skip rule are never even opened — by default that's
+  `C:/Windows`, `node_modules`, `.git`, `.venv`, `AppData`, and similar noise.
+- The report is a single self-contained HTML file. No telemetry, no network
+  calls, no accounts.
+
+The "Export review list" button gives you a text file of the copies you flagged.
+Nothing acts on it but you.
+
+## Optional tuning
+
+Everything below is optional — `config.py` has sensible defaults. The knobs
+worth knowing about:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SKIP_PATHS` | Windows, `node_modules`, `.git`, … | Any path containing one of these substrings is never traversed |
+| `LARGE_FILE_BYTES` | 1 GB | The "Large Files" cutoff |
+| `OLD_FILE_DAYS` | 365 | What counts as untouched |
+| `NEAR_DUP_THRESHOLD` | 0.8 | How similar two files must be to be called near-duplicates. Lower toward 0.6 for looser matching |
+| `CATEGORY_EXTENSIONS` | — | Which file extensions count as Photos, Videos, Documents, … |
+
+A note on ages: "last touched" uses each file's **modification** time. Access
+time looks like the better signal but is unreliable in practice — often
+disabled outright, and bumped by backup tools and search indexers that never
+really "opened" anything.
 
 ## License
 
