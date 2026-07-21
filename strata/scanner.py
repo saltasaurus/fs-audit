@@ -16,15 +16,23 @@ from collections import defaultdict
 
 import neardup
 from config import (
-    SKIP_PATHS, CATEGORY_EXTENSIONS,
-    LARGE_FILE_BYTES, OLD_FILE_DAYS,
-    OLD_LIST_FLOOR_DAYS, OLD_LIST_MAX, AGE_TOLERANCE_DAYS,
-    MAP_MIN_FRACTION, MAP_MAX_CHILDREN, FILE_LIST_MAX,
-    NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, NEAR_DUP_EXTENSIONS,
-    JUNK_FILENAMES, EMPTY_JUNK_MAX, DUP_LIST_MAX,
+    SKIP_PATHS, CATEGORY_EXTENSIONS, LARGE_FILE_BYTES, OLD_FILE_DAYS,
+    NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, NEAR_DUP_EXTENSIONS, JUNK_FILENAMES,
 )
 
 logger = logging.getLogger(__name__)
+
+# Payload bounds and rendering internals. These exist to stop a whole-filesystem
+# scan from producing a report the browser can't open — they are not user knobs,
+# which is why they live here rather than in config.py.
+OLD_LIST_FLOOR_DAYS: int = 30   # Old & Unused slider floor; younger files never listed
+OLD_LIST_MAX: int = 500         # largest N old entries inlined
+AGE_TOLERANCE_DAYS: int = 1     # same-folder files this close in age collapse to one row
+MAP_MIN_FRACTION: float = 0.001  # Storage Map: prune folders below this share of the scan
+MAP_MAX_CHILDREN: int = 40      # Storage Map: tiles per level
+FILE_LIST_MAX: int = 50         # largest N files listed per folder leaf
+DUP_LIST_MAX: int = 500         # duplicate sets inlined (headline counts stay complete)
+EMPTY_JUNK_MAX: int = 1000      # cap per Empty & Junk list
 
 # Fixed by the Strata design.
 CATEGORY_COLORS: dict[str, str] = {
@@ -37,6 +45,14 @@ CATEGORY_COLORS: dict[str, str] = {
 _EXT_TO_CATEGORY: dict[str, str] = {
     ext: cat for cat, exts in CATEGORY_EXTENSIONS.items() for ext in exts
 }
+
+
+def _progress(message: str, *, final: bool = False) -> None:
+    """Redraw the stderr status line. Padded so a shorter message fully
+    overwrites a longer previous one; `final` ends the line instead of holding
+    the carriage return."""
+    print("\r  " + message.ljust(58), end="\n" if final else "",
+          file=sys.stderr, flush=True)
 
 
 def _should_skip(path: str) -> bool:
@@ -141,7 +157,7 @@ def scan(roots: list[str]) -> dict:
 
                 scanned += 1
                 if scanned % 500 == 0:
-                    print(f"\r  scanned {scanned:,} files...", end="", file=sys.stderr, flush=True)
+                    _progress(f"scanned {scanned:,} files...")
 
                 size = st.st_size
                 category = _category(filename)
@@ -192,14 +208,12 @@ def scan(roots: list[str]) -> dict:
                         "color": _color(category), "bytes": size, "mtime": last_touch,
                     })
 
-    print(f"\r  scanned {scanned:,} files.{' ' * 30}", file=sys.stderr, flush=True)
+    _progress(f"scanned {scanned:,} files.", final=True)
     duplicates, path_hash = _find_duplicates(size_to_paths, path_meta)
-    print(f"\r  duplicate scan complete - {len(duplicates):,} sets found.{' ' * 20}",
-          file=sys.stderr, flush=True)
+    _progress(f"duplicate scan complete - {len(duplicates):,} sets found.", final=True)
     near_dupes = neardup.find_near_duplicates(
         near_candidates, path_meta, NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, path_hash)
-    print(f"\r  near-duplicate scan complete - {len(near_dupes):,} sets found.{' ' * 20}",
-          file=sys.stderr, flush=True)
+    _progress(f"near-duplicate scan complete - {len(near_dupes):,} sets found.", final=True)
     large_files.sort(key=lambda f: f["bytes"], reverse=True)
 
     scanned_total = sum(category_bytes.values())
@@ -291,8 +305,7 @@ def _find_duplicates(
             digest = _sha256(path)
             done += 1
             if done % 20 == 0:
-                print(f"\r  hashing possible duplicates: {done:,}/{total:,}...",
-                      end="", file=sys.stderr, flush=True)
+                _progress(f"hashing possible duplicates: {done:,}/{total:,}...")
             if digest is not None:
                 hash_to_paths[digest].append(path)
                 path_hash[path] = digest

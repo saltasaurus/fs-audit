@@ -32,24 +32,6 @@ LARGE_FILE_BYTES: int = 1024 ** 3          # 1 GB
 # Files untouched for at least this long count as "old & unused" (Overview stat).
 OLD_FILE_DAYS: int = 365
 
-# The Old & Unused view's slider floor: files younger than this never enter its
-# list. Only the OLD_LIST_MAX largest are kept, to bound the inlined payload.
-OLD_LIST_FLOOR_DAYS: int = 30
-OLD_LIST_MAX: int = 500
-
-# Old & Unused: files in one folder whose modification times fall within this
-# window are treated as "the same age" and collapse into a single folder row.
-AGE_TOLERANCE_DAYS: int = 1
-
-# Storage Map: folders below this fraction of the total scan are pruned as noise,
-# and each level shows at most MAP_MAX_CHILDREN tiles.
-MAP_MIN_FRACTION: float = 0.001
-MAP_MAX_CHILDREN: int = 40
-
-# Storage Map file leaves: largest files listed per folder (rest summarised as
-# "+N more"). Bounds the inlined payload on a whole-filesystem scan.
-FILE_LIST_MAX: int = 50
-
 # Extension → category. Anything unlisted falls into "Other".
 # Category colours are fixed by the Strata design (see scanner.CATEGORY_COLORS).
 CATEGORY_EXTENSIONS: dict[str, list[str]] = {
@@ -79,13 +61,6 @@ NEAR_DUP_EXTENSIONS: set[str] = {
     "rs", "rb", "gd", "json", "yaml", "yml", "toml", "sh", "html", "css", "sql",
 }
 
-# Duplicates: only the top N sets (by wasted space) are inlined into the report
-# and rendered — a real scan can find tens of thousands of sets, which would
-# freeze the page. Headline counts/totals still reflect every set found.
-DUP_LIST_MAX: int = 500
-
 # Empty & Junk view. OS clutter matched by exact filename (case-insensitive).
 JUNK_FILENAMES: set[str] = {"thumbs.db", "desktop.ini", ".ds_store"}
-# Each Empty & Junk list is capped to keep the inlined report payload bounded.
-EMPTY_JUNK_MAX: int = 1000
 

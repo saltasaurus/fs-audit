@@ -131,8 +131,6 @@
   .tsz{font-family:var(--mono);font-size:13.5px;font-weight:600}
   .topened{font-family:var(--mono);font-size:12.5px;color:var(--t2)}
   .empty{padding:48px;text-align:center;color:var(--t3);font-size:14px}
-  .placeholder{border:1px dashed var(--b-card);border-radius:16px;padding:64px;text-align:center;color:var(--t3)}
-  .placeholder b{color:var(--t2);display:block;margin-bottom:8px;font-size:15px}
 </style>
 </head>
 <body>
@@ -221,32 +219,24 @@ function treemap(items, x, y, w, h, out){
     treemap(b, x, y+h*aFrac, w, h*(1-aFrac), out);
   }
 }
-function renderTreemap(items, mapNav=false){
-  const annotated = mapNav ? items.map((it,i)=>({...it,_i:i})) : items;
-  const tiles=[]; treemap(annotated, 0, 0, 100, 100, tiles);
+// One renderer for both treemaps. `link(tile)` returns the data-attribute that
+// makes a tile clickable, or "" for a static one — the overview links every tile
+// to the map, the map links only the tiles you can actually drill into.
+const DRILL_DOT = '<span style="position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:rgba(10,13,18,0.5)"></span>';
+
+function renderTiles(items, link, {minW=8, minH=12, dot=false}={}){
+  const tiles=[]; treemap(items.map((it,i)=>({...it,_i:i})), 0, 0, 100, 100, tiles);
   return tiles.map(t=>{
-    const showText = t.w > 8 && t.h > 12;
-    const nav = mapNav ? `data-mapopen="${t._i}" ` : "";
-    return `<div class="tile" ${nav}title="${esc(t.name)} · ${fmtBytes(t.bytes)}"
-      style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;background:${t.color};cursor:${mapNav?"pointer":"default"}">
-      ${showText ? `<b>${esc(t.name)}</b><small>${fmtBytes(t.bytes)}</small>` : ""}</div>`;
+    const attr = link(t);
+    return `<div class="tile" ${attr} title="${esc(t.name)} · ${fmtBytes(t.bytes)}"
+      style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;background:${t.color};cursor:${attr?"pointer":"default"}">
+      ${dot && attr ? DRILL_DOT : ""}${t.w > minW && t.h > minH
+        ? `<b>${esc(t.name)}</b><small>${fmtBytes(t.bytes)}</small>` : ""}</div>`;
   }).join("");
 }
 
-// Map tiles carry their child index so folders (tiles with children) can drill in.
-function renderMapTiles(items){
-  const annotated = items.map((it,i)=>({...it,_i:i}));
-  const tiles=[]; treemap(annotated, 0, 0, 100, 100, tiles);
-  return tiles.map(t=>{
-    const drillable = !!((t.children && t.children.length) || t.files);
-    const showText = t.w > 7 && t.h > 10;
-    const dot = drillable
-      ? '<span style="position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:rgba(10,13,18,0.5)"></span>' : "";
-    return `<div class="tile" ${drillable?`data-drill="${t._i}"`:""} title="${esc(t.name)} · ${fmtBytes(t.bytes)}"
-      style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;background:${t.color};cursor:${drillable?"pointer":"default"}">
-      ${dot}${showText ? `<b>${esc(t.name)}</b><small>${fmtBytes(t.bytes)}</small>` : ""}</div>`;
-  }).join("");
-}
+const linkToMap = t => `data-mapopen="${t._i}"`;
+const linkToDrill = t => ((t.children && t.children.length) || t.files) ? `data-drill="${t._i}"` : "";
 
 // ---- views ----
 function viewOverview(){
@@ -280,7 +270,7 @@ function viewOverview(){
       <div class="card map-card">
         <div class="map-head"><span class="label">Storage Map</span>
           <span class="link" data-go="map">Open full map →</span></div>
-        <div class="treemap">${renderTreemap(d.tree ? (d.tree.children || []) : [], true)}</div>
+        <div class="treemap">${renderTiles(d.tree ? (d.tree.children || []) : [], linkToMap)}</div>
       </div>
     </div>
     <div class="insights">
@@ -398,7 +388,8 @@ function viewLarge(){
 }
 
 function viewMap(){
-  if (!DATA.tree) return viewPlaceholder("Storage Map", "Nothing scanned yet.");
+  if (!DATA.tree) return `<div class="view"><h1>Storage Map</h1>
+    <div class="sub">Nothing was scanned — the folders you gave held no readable files.</div></div>`;
   if (!state.mapStack) state.mapStack = [DATA.tree];
   const cur = state.mapStack[state.mapStack.length-1];
 
@@ -416,7 +407,7 @@ function viewMap(){
     `<span style="display:inline-flex;align-items:center;gap:8px;margin-right:16px;font-size:12px;color:var(--body)">
       <span class="dot" style="background:${color}"></span>${esc(cat)}</span>`).join("");
 
-  const tiles = renderMapTiles(kids);
+  const tiles = renderTiles(kids, linkToDrill, {minW:7, minH:10, dot:true});
   return `<div class="view">
     <div style="font-size:13px;color:var(--t2);margin-bottom:10px">${crumbs}</div>
     <div class="head-row">
@@ -451,6 +442,10 @@ function mapFileList(node, crumbs){
 
 const fmtDays = d => d < 365 ? `${d} days` : `${(d/365).toFixed(1)} years`;
 
+const folderIcon = color => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+  stroke="${color}" stroke-width="1.8" style="vertical-align:-2px;margin-right:6px">
+  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
+
 function filterOld(threshold){
   const cutoff = Date.now()/1000 - threshold*86400;
   const items = DATA.oldFiles.files
@@ -463,9 +458,6 @@ function oldTable(items){
   if (!items.length)
     return `<div class="empty">Nothing untouched this long — try lowering the threshold.</div>`;
   const cols = "grid-template-columns:2.4fr 1fr 1.2fr";
-  const folderIcon = c => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-    stroke="${c}" stroke-width="1.8" style="vertical-align:-2px;margin-right:6px">
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
   const rows = items.map(f=>{
     const isFolder = f.type === "folder";
     const name = isFolder ? folderIcon(f.color) + esc(f.name) : esc(f.name);
@@ -526,10 +518,7 @@ function updateOldDynamic(){
 function viewEmptyJunk(){
   const ej = DATA.emptyJunk, c = ej.counts;
   const total = c.folders + c.zero + c.junk;
-  const folderIcon = col => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-    stroke="${col}" stroke-width="1.8" style="vertical-align:-2px;margin-right:6px">
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
-  const dot = col => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  const dot = col =>`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
     background:${col};margin-right:8px;vertical-align:1px"></span>`;
 
   const section = (title, count, rowsHtml, colStyle, headHtml, shown) => {
@@ -567,19 +556,13 @@ function viewEmptyJunk(){
     ${body}</div>`;
 }
 
-function viewPlaceholder(title, note){
-  return `<div class="view"><h1>${title}</h1><div class="sub">${note}</div>
-    <div class="placeholder"><b>Coming next</b>This view is stubbed in the current build.</div></div>`;
-}
+const VIEWS = {
+  overview: viewOverview, map: viewMap, dup: viewDuplicates,
+  large: viewLarge, old: viewOld, empty: viewEmptyJunk,
+};
 
 function renderMain(){
-  const main = document.getElementById("main");
-  if (state.view==="overview") main.innerHTML = viewOverview();
-  else if (state.view==="dup") main.innerHTML = viewDuplicates();
-  else if (state.view==="large") main.innerHTML = viewLarge();
-  else if (state.view==="map") main.innerHTML = viewMap();
-  else if (state.view==="empty") main.innerHTML = viewEmptyJunk();
-  else main.innerHTML = viewOld();
+  document.getElementById("main").innerHTML = (VIEWS[state.view] || viewOld)();
   renderStickyBar();
 }
 
@@ -642,10 +625,17 @@ document.addEventListener("click", e=>{
   if (e.target.id==="exportBtn"){ exportReview(); }
 });
 document.addEventListener("input", e=>{
-  if (e.target.id==="dupSearch"){ state.dupSearch=e.target.value; const p=e.target.selectionStart; renderMain();
-    const el=document.getElementById("dupSearch"); if(el){el.focus();el.setSelectionRange(p,p);} }
-  if (e.target.id==="largeSearch"){ state.largeSearch=e.target.value; const p=e.target.selectionStart; renderMain();
-    const el=document.getElementById("largeSearch"); if(el){el.focus();el.setSelectionRange(p,p);} }
+  // Both search boxes use their element id as their state key, so one branch
+  // covers them: re-render, then restore focus and caret where the user left it.
+  const id = e.target.id;
+  if (id === "dupSearch" || id === "largeSearch"){
+    state[id] = e.target.value;
+    const p = e.target.selectionStart;
+    renderMain();
+    const el = document.getElementById(id);
+    if (el){ el.focus(); el.setSelectionRange(p, p); }
+    return;
+  }
   // Slider updates only the dynamic bits so the drag isn't interrupted by a re-render.
   if (e.target.id==="oldSlider"){ state.oldThreshold=+e.target.value; updateOldDynamic(); }
 });

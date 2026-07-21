@@ -11,6 +11,7 @@ between byte-identical files are dropped here so a file only ever appears in one
 place.
 """
 
+import os
 import hashlib
 import logging
 from collections import defaultdict
@@ -164,7 +165,7 @@ def find_near_duplicates(
         members.sort(key=lambda p: path_meta[p][2], reverse=True)  # newest draft first
         category = path_meta[members[0]][0]
         sets.append({
-            "name": _basename(members[0]),
+            "name": os.path.basename(members[0]),
             "category": category,
             "color": _color(category),
             "similarity": round(similarity, 3),
@@ -176,11 +177,6 @@ def find_near_duplicates(
 
     sets.sort(key=lambda s: (s["similarity"], len(s["members"])), reverse=True)
     return sets
-
-
-def _basename(path: str) -> str:
-    import os
-    return os.path.basename(path)
 
 
 def demo() -> None:
