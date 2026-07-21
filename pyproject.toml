@@ -1,0 +1,13 @@
+[project]
+name = "fs-audit"
+version = "0.2.0"
+description = "Read-only filesystem auditor with a visual dashboard — finds duplicate, large, and old files."
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

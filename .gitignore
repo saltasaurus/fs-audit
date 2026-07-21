@@ -1,0 +1,6 @@
+.env
+roots.txt
+outputs/
+__pycache__/
+.venv/
+.claude/settings.local.json

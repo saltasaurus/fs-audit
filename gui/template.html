@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata — Storage Auditor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D12; --sidebar:#0D1117; --card:#12161D; --thead:#0F1319;
+    --b-soft:#1B212B; --b-card:#1E2530; --b-row:#171B23; --track:#232935;
+    --t1:#E8EBF0; --t2:#8992A3; --t3:#5B6472; --body:#C7CCD6;
+    --accent:#2DD4BF; --accent-hi:#5eead4; --accent-tint:rgba(45,212,191,0.12);
+    --wasted:#FB923C; --age:#FBBF24; --near:#C084FC;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --ui:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:14px;display:flex;overflow:hidden}
+  .mono{font-family:var(--mono)}
+  a{color:inherit;text-decoration:none}
+
+  /* ---- Sidebar ---- */
+  aside{width:248px;flex:0 0 248px;background:var(--sidebar);border-right:1px solid var(--b-soft);
+    padding:20px 14px;display:flex;flex-direction:column;height:100%}
+  .logo{display:flex;align-items:center;gap:11px;padding:6px 8px 18px}
+  .mark{width:26px;height:26px;border-radius:7px;background:#161B23;border:1px solid #232935;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2.5px}
+  .mark i{height:3px;border-radius:2px;display:block}
+  .wordmark{font-size:16px;font-weight:700;letter-spacing:0.04em}
+  nav{display:flex;flex-direction:column;gap:2px}
+  .nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;
+    font-size:13.5px;color:var(--t2);cursor:pointer;transition:background .13s,color .13s}
+  .nav-item:hover{background:#161B23}
+  .nav-item.active{background:var(--accent-tint);color:var(--accent);font-weight:600}
+  .nav-item svg{width:18px;height:18px;flex:0 0 18px}
+  .gauge{margin-top:auto;border-top:1px solid var(--b-soft);padding:14px 10px 6px}
+  .gauge-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--t3);margin-bottom:8px}
+  .gauge-bar{height:7px;border-radius:99px;background:var(--b-soft);overflow:hidden;display:flex}
+  .gauge-bar span{height:100%}
+
+  /* ---- Main ---- */
+  main{flex:1;overflow-y:auto;padding:30px 36px 64px;max-width:1400px}
+  .view{animation:fade .32s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  h1{font-size:26px;font-weight:700;margin:0;color:var(--t1)}
+  .sub{font-size:14px;color:var(--t2);margin:6px 0 24px}
+  .head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+
+  .card{background:var(--card);border:1px solid var(--b-card);border-radius:16px;padding:22px}
+  .label{font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:var(--t2);font-weight:600}
+
+  /* Overview */
+  .ov-row1{display:flex;gap:20px;margin-bottom:20px;align-items:stretch}
+  .disk-card{flex:0 0 380px;display:flex;flex-direction:column}
+  .map-card{flex:1;display:flex;flex-direction:column}
+  .donut-wrap{display:flex;gap:26px;align-items:center;margin-top:20px}
+  .donut{width:132px;height:132px;border-radius:50%;position:relative;flex:0 0 132px}
+  .donut::after{content:"";position:absolute;inset:15px;background:var(--card);border-radius:50%}
+  .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1}
+  .donut-center b{font-family:var(--mono);font-size:19px;font-weight:700}
+  .donut-center small{font-size:10.5px;color:var(--t3)}
+  .legend{flex:1;display:flex;flex-direction:column;gap:8px}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:12px}
+  .dot{width:7px;height:7px;border-radius:50%;flex:0 0 7px}
+  .legend-row .nm{color:var(--body)}
+  .legend-row .sz{margin-left:auto;font-family:var(--mono);color:var(--t2)}
+  .map-head{display:flex;justify-content:space-between;align-items:center}
+  .link{color:var(--accent);font-size:12px;font-weight:600;cursor:pointer}
+  .treemap{position:relative;flex:1;min-height:250px;margin-top:16px;border-radius:10px;overflow:hidden}
+  .tile{position:absolute;border:1px solid #0A0D12;padding:9px;overflow:hidden;transition:filter .12s,transform .12s;cursor:default}
+  .tile b{display:block;color:rgba(10,13,18,0.88);font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tile small{font-family:var(--mono);color:rgba(10,13,18,0.65);font-size:11px}
+  .tile:hover{filter:brightness(1.16);transform:scale(1.01);z-index:2}
+
+  .insights{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .insight{border-radius:16px;padding:20px;cursor:pointer;transition:border-color .13s,transform .13s;border:1px solid var(--b-card);background:var(--card)}
+  .insight:hover{border-color:#2c3444;transform:translateY(-2px)}
+  .chip{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .chip svg{width:18px;height:18px}
+  .insight .k{font-size:13px;color:var(--t2);font-weight:600}
+  .insight .stat{font-family:var(--mono);font-size:24px;font-weight:700;margin:10px 0 4px}
+  .insight .subv{font-size:12.5px;color:var(--t3)}
+
+  /* Search */
+  .search{position:relative;width:260px}
+  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--t3)}
+  .search input{width:100%;background:var(--card);border:1px solid var(--b-card);border-radius:9px;
+    padding:9px 12px 9px 34px;color:var(--t1);font-family:var(--ui);font-size:13px;outline:none}
+  .search input:focus{border-color:#2c3444}
+
+  /* Duplicates */
+  .dupset{background:var(--card);border:1px solid var(--b-card);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+  .dup-head{display:flex;align-items:center;gap:12px}
+  .dup-name{font-family:var(--mono);font-size:14.5px;font-weight:600}
+  .pill{background:var(--b-soft);color:var(--t2);font-size:11.5px;border-radius:99px;padding:3px 10px}
+  .wasted{margin-left:auto;color:var(--wasted);font-size:13px;font-weight:600;font-family:var(--mono)}
+  .similar{margin-left:auto;color:var(--near);font-size:13px;font-weight:600;font-family:var(--mono)}
+  .dup-section{font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--t2);font-weight:600;margin:6px 2px 14px}
+  .dup-section.near-hd{margin-top:30px}
+  .copies{border-top:1px solid var(--b-soft);margin-top:12px;padding-top:6px}
+  .copy{display:flex;align-items:center;gap:12px;padding:7px 4px}
+  .copy .path{font-family:var(--mono);font-size:12.5px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .copy .csz{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--t3);flex:0 0 auto}
+  .keep{background:var(--accent-tint);color:var(--accent);font-size:11px;border-radius:99px;padding:3px 9px;flex:0 0 auto}
+  .cbox{width:18px;height:18px;border-radius:5px;border:1.5px solid #2A3140;flex:0 0 18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .cbox.on{background:var(--accent);border-color:var(--accent)}
+  .cbox.on svg{width:11px;height:11px;color:#0A0D12}
+  .spacer{width:18px;flex:0 0 18px}
+  .stickybar{position:fixed;left:248px;right:0;bottom:0;background:rgba(13,17,23,0.92);backdrop-filter:blur(8px);
+    border-top:1px solid var(--b-soft);padding:14px 36px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+  .stickybar.hidden{display:none}
+  .btn{background:var(--accent);color:#0A0D12;font-weight:600;font-size:13px;border:none;border-radius:99px;padding:9px 18px;cursor:pointer}
+  .btn:hover{background:var(--accent-hi)}
+
+  /* Table */
+  .tbl{border:1px solid var(--b-card);border-radius:14px;overflow:hidden}
+  .tr{display:grid;grid-template-columns:2.4fr 1fr 1fr 1.2fr;align-items:center}
+  .thead{background:var(--thead);padding:12px 20px;border-bottom:1px solid var(--b-card)}
+  .th{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--t2);cursor:pointer;user-select:none;display:flex;align-items:center;gap:5px}
+  .th .arw{color:var(--accent);font-size:9px}
+  .trow{padding:14px 20px;border-bottom:1px solid var(--b-row)}
+  .trow:last-child{border-bottom:none}
+  .trow:hover{background:#161B23}
+  .fname{font-family:var(--mono);font-size:13.5px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fpath{font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .cat{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--body)}
+  .tsz{font-family:var(--mono);font-size:13.5px;font-weight:600}
+  .topened{font-family:var(--mono);font-size:12.5px;color:var(--t2)}
+  .empty{padding:48px;text-align:center;color:var(--t3);font-size:14px}
+  .placeholder{border:1px dashed var(--b-card);border-radius:16px;padding:64px;text-align:center;color:var(--t3)}
+  .placeholder b{color:var(--t2);display:block;margin-bottom:8px;font-size:15px}
+</style>
+</head>
+<body>
+<aside>
+  <div class="logo">
+    <div class="mark">
+      <i style="width:100%;background:#5B9DFF"></i>
+      <i style="width:65%;background:#22D3EE"></i>
+      <i style="width:85%;background:#2DD4BF"></i>
+    </div>
+    <span class="wordmark">STRATA</span>
+  </div>
+  <nav id="nav"></nav>
+  <div class="gauge" id="gauge"></div>
+</aside>
+<main id="main"></main>
+
+<script>
+const DATA = /*__SCAN_DATA__*/null;
+
+// ---- formatting ----
+const fmtBytes = b => {
+  if (!b) return "0 B";
+  const u = ["B","KB","MB","GB","TB"];
+  const i = Math.min(Math.floor(Math.log(b)/Math.log(1024)), u.length-1);
+  const v = b/Math.pow(1024,i);
+  return (i >= 3 ? v.toFixed(1) : Math.round(v)) + " " + u[i];
+};
+const relTime = epoch => {
+  const days = (Date.now()/1000 - epoch)/86400;
+  if (days < 1) return "today";
+  if (days < 30) return Math.round(days) + " days ago";
+  if (days < 365) return Math.round(days/30) + " months ago";
+  return (days/365).toFixed(1) + " years ago";
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ---- icons ----
+const IC = {
+  overview:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  map:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/>',
+  dup:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  large:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  old:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+};
+const svg = (paths, cls="") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+
+const NAV = [
+  {id:"overview", label:"Overview", icon:IC.overview},
+  {id:"map",      label:"Storage Map", icon:IC.map},
+  {id:"dup",      label:"Duplicates", icon:IC.dup},
+  {id:"large",    label:"Large Files", icon:IC.large},
+  {id:"old",      label:"Old & Unused", icon:IC.old},
+  {id:"empty",    label:"Empty & Junk", icon:IC.trash},
+];
+
+const state = {
+  view:"overview",
+  dupSearch:"", largeSearch:"",
+  largeSort:{key:"size", dir:"desc"},
+  selected:new Set(),  // `${setIdx}__${copyIdx}`
+  mapStack:null,       // lazy: [root, ...drilled folders]
+  oldThreshold:365,    // Old & Unused slider (days)
+};
+
+// pre-select every non-keeper copy by default (design default).
+DATA.duplicates.sets.forEach((s, si) => s.copies.forEach((c, ci) => { if (ci > 0) state.selected.add(si+"__"+ci); }));
+
+// ---- treemap (binary split) ----
+function treemap(items, x, y, w, h, out){
+  if (!items.length) return;
+  if (items.length === 1){ out.push({...items[0], x, y, w, h}); return; }
+  const total = items.reduce((a,i)=>a+i.bytes,0);
+  let acc=0, cut=0;
+  for (; cut < items.length-1; cut++){ if (acc + items[cut].bytes >= total/2) break; acc += items[cut].bytes; }
+  const a = items.slice(0, cut+1), b = items.slice(cut+1);
+  const aFrac = a.reduce((s,i)=>s+i.bytes,0)/total;
+  if (w >= h){
+    treemap(a, x, y, w*aFrac, h, out);
+    treemap(b, x+w*aFrac, y, w*(1-aFrac), h, out);
+  } else {
+    treemap(a, x, y, w, h*aFrac, out);
+    treemap(b, x, y+h*aFrac, w, h*(1-aFrac), out);
+  }
+}
+function renderTreemap(items, mapNav=false){
+  const annotated = mapNav ? items.map((it,i)=>({...it,_i:i})) : items;
+  const tiles=[]; treemap(annotated, 0, 0, 100, 100, tiles);
+  return tiles.map(t=>{
+    const showText = t.w > 8 && t.h > 12;
+    const nav = mapNav ? `data-mapopen="${t._i}" ` : "";
+    return `<div class="tile" ${nav}title="${esc(t.name)} · ${fmtBytes(t.bytes)}"
+      style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;background:${t.color};cursor:${mapNav?"pointer":"default"}">
+      ${showText ? `<b>${esc(t.name)}</b><small>${fmtBytes(t.bytes)}</small>` : ""}</div>`;
+  }).join("");
+}
+
+// Map tiles carry their child index so folders (tiles with children) can drill in.
+function renderMapTiles(items){
+  const annotated = items.map((it,i)=>({...it,_i:i}));
+  const tiles=[]; treemap(annotated, 0, 0, 100, 100, tiles);
+  return tiles.map(t=>{
+    const drillable = !!((t.children && t.children.length) || t.files);
+    const showText = t.w > 7 && t.h > 10;
+    const dot = drillable
+      ? '<span style="position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:rgba(10,13,18,0.5)"></span>' : "";
+    return `<div class="tile" ${drillable?`data-drill="${t._i}"`:""} title="${esc(t.name)} · ${fmtBytes(t.bytes)}"
+      style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;background:${t.color};cursor:${drillable?"pointer":"default"}">
+      ${dot}${showText ? `<b>${esc(t.name)}</b><small>${fmtBytes(t.bytes)}</small>` : ""}</div>`;
+  }).join("");
+}
+
+// ---- views ----
+function viewOverview(){
+  const d = DATA;
+  const usedPct = d.disk ? Math.round(d.disk.used/d.disk.total*100) : 0;
+  // donut conic gradient from scanned categories
+  let acc=0; const segs = d.categories.map(c=>{
+    const frac = c.bytes/d.scannedTotal*100, s=acc, e=acc+frac; acc=e;
+    return `${c.color} ${s}% ${e}%`;
+  }).join(",");
+  const legend = d.categories.map(c=>`
+    <div class="legend-row"><span class="dot" style="background:${c.color}"></span>
+      <span class="nm">${esc(c.name)}</span><span class="sz">${fmtBytes(c.bytes)}</span></div>`).join("");
+
+  const insight = (icon,color,tint,k,stat,sub,go)=>`
+    <div class="insight" data-go="${go}">
+      <div class="chip" style="background:${tint};color:${color}">${svg(icon)}</div>
+      <div class="k">${k}</div><div class="stat">${stat}</div><div class="subv">${sub}</div></div>`;
+
+  return `<div class="view">
+    <h1>Overview</h1><div class="sub">A quick read on where your disk space is going.</div>
+    <div class="ov-row1">
+      <div class="card disk-card">
+        <div class="label">Disk Usage</div>
+        <div class="donut-wrap">
+          <div class="donut" style="background:conic-gradient(from -90deg,${segs})">
+            <div class="donut-center"><b>${usedPct}%</b><small>used</small></div></div>
+          <div class="legend">${legend || '<span class="subv">No files scanned.</span>'}</div>
+        </div>
+      </div>
+      <div class="card map-card">
+        <div class="map-head"><span class="label">Storage Map</span>
+          <span class="link" data-go="map">Open full map →</span></div>
+        <div class="treemap">${renderTreemap(d.tree ? (d.tree.children || []) : [], true)}</div>
+      </div>
+    </div>
+    <div class="insights">
+      ${insight(IC.dup,"#FB923C","rgba(251,146,60,0.14)","Duplicates",
+        fmtBytes(d.duplicates.totalWasted), d.duplicates.setCount+" duplicate sets found","dup")}
+      ${insight(IC.large,"#22D3EE","rgba(34,211,238,0.14)","Large Files",
+        fmtBytes(d.largeFiles.totalBytes), d.largeFiles.count+" files over 1 GB","large")}
+      ${insight(IC.old,"#94A3B8","rgba(148,163,184,0.14)","Old & Unused",
+        fmtBytes(d.oldUnused.totalBytes), d.oldUnused.count+" items untouched 1yr+","old")}
+      ${insight(IC.trash,"#F472B6","rgba(244,114,182,0.14)","Empty & Junk",
+        (d.emptyJunk.counts.folders+d.emptyJunk.counts.zero+d.emptyJunk.counts.junk).toLocaleString()+" items",
+        d.emptyJunk.counts.folders+" empty folders · "+d.emptyJunk.counts.junk+" junk","empty")}
+    </div></div>`;
+}
+
+function viewDuplicates(){
+  const q = state.dupSearch.toLowerCase();
+
+  const exactCards = DATA.duplicates.sets
+    .map((s,i)=>({s,i}))
+    .filter(({s})=>s.name.toLowerCase().includes(q))
+    .map(({s,i})=>{
+      const copies = s.copies.map((c,ci)=>{
+        if (ci === 0) return `<div class="copy"><span class="spacer"></span>
+          <span class="path">${esc(c.path)}</span>
+          <span class="keep">Recommended keep</span></div>`;
+        const on = state.selected.has(i+"__"+ci);
+        return `<div class="copy">
+          <span class="cbox ${on?"on":""}" data-sel="${i}__${ci}">${on?svg(IC.check):""}</span>
+          <span class="path">${esc(c.path)}</span>
+          <span class="csz">${fmtBytes(c.bytes)}</span></div>`;
+      }).join("");
+      return `<div class="dupset">
+        <div class="dup-head"><span class="dot" style="background:${s.color}"></span>
+          <span class="dup-name">${esc(s.name)}</span>
+          <span class="pill">${s.copies.length} copies</span>
+          <span class="wasted">${fmtBytes(s.wasted)} wasted</span></div>
+        <div class="copies">${copies}</div></div>`;
+    }).join("") || `<div class="empty">No exact duplicate sets match your search.</div>`;
+
+  const exactCap = DATA.duplicates.capped
+    ? `<div class="empty" style="padding:12px;font-size:12px">Showing the ${DATA.duplicates.shown.toLocaleString()} sets with the most wasted space, of ${DATA.duplicates.setCount.toLocaleString()} found.</div>` : "";
+
+  const near = (DATA.duplicates.near && DATA.duplicates.near.sets) || [];
+  const nearCards = near
+    .filter(s=>s.name.toLowerCase().includes(q))
+    .map(s=>{
+      const members = s.members.map((m,mi)=>`<div class="copy">
+        <span class="spacer"></span>
+        <span class="path">${esc(m.path)}</span>
+        ${mi===0?'<span class="keep">Newest</span>':''}
+        <span class="csz">${fmtBytes(m.bytes)}</span></div>`).join("");
+      return `<div class="dupset">
+        <div class="dup-head"><span class="dot" style="background:${s.color}"></span>
+          <span class="dup-name">${esc(s.name)}</span>
+          <span class="pill">${s.members.length} related</span>
+          <span class="similar">${Math.round(s.similarity*100)}% similar</span></div>
+        <div class="copies">${members}</div></div>`;
+    }).join("") || `<div class="empty">No near-duplicate sets match your search.</div>`;
+
+  const nearMeta = DATA.duplicates.near || {};
+  const nearCap = nearMeta.capped
+    ? `<div class="empty" style="padding:12px;font-size:12px">Showing the ${nearMeta.shown.toLocaleString()} most-similar sets, of ${nearMeta.setCount.toLocaleString()} found.</div>` : "";
+  const nearSection = near.length ? `
+    <div class="dup-section near-hd">Near-duplicates · similar content, review before deleting</div>
+    ${nearCards}${nearCap}` : "";
+
+  return `<div class="view">
+    <div class="head-row"><div>
+      <h1>Duplicates</h1>
+      <div class="sub">${DATA.duplicates.setCount.toLocaleString()} exact · ${fmtBytes(DATA.duplicates.totalWasted)} reclaimable${nearMeta.setCount?` · ${nearMeta.setCount.toLocaleString()} near`:""}</div>
+    </div>
+    <div class="search">${svg(IC.search)}<input id="dupSearch" placeholder="Search duplicate sets..." value="${esc(state.dupSearch)}"></div>
+    </div>
+    <div class="dup-section">Exact duplicates · byte-for-byte identical</div>
+    ${exactCards}${exactCap}${nearSection}</div>`;
+}
+
+function viewLarge(){
+  const q = state.largeSearch.toLowerCase();
+  const {key,dir} = state.largeSort;
+  const keyFn = {
+    name:f=>f.name.toLowerCase(), category:f=>f.category,
+    size:f=>f.bytes, lastOpened:f=>f.lastOpened,
+  }[key];
+  let files = DATA.largeFiles.files.filter(f =>
+    f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q));
+  files = files.sort((a,b)=>{
+    const x=keyFn(a), y=keyFn(b);
+    const c = x<y?-1:x>y?1:0; return dir==="asc"?c:-c;
+  });
+
+  const arrow = k => k===key ? `<span class="arw">${dir==="asc"?"▲":"▼"}</span>` : "";
+  const th = (k,lbl)=>`<span class="th" data-sort="${k}">${lbl}${arrow(k)}</span>`;
+
+  const rows = files.map(f=>`
+    <div class="tr trow">
+      <div><div class="fname">${esc(f.name)}</div><div class="fpath">${esc(f.path)}</div></div>
+      <div class="cat"><span class="dot" style="background:${f.color}"></span>${esc(f.category)}</div>
+      <div class="tsz">${fmtBytes(f.bytes)}</div>
+      <div class="topened">${relTime(f.lastOpened)}</div>
+    </div>`).join("") || `<div class="empty">No files match your search.</div>`;
+
+  return `<div class="view">
+    <div class="head-row"><div>
+      <h1>Large Files</h1>
+      <div class="sub">${DATA.largeFiles.count} files over 1 GB · ${fmtBytes(DATA.largeFiles.totalBytes)} total</div>
+    </div>
+    <div class="search">${svg(IC.search)}<input id="largeSearch" placeholder="Search files..." value="${esc(state.largeSearch)}"></div>
+    </div>
+    <div class="tbl">
+      <div class="tr thead">${th("name","Name")}${th("category","Category")}${th("size","Size")}${th("lastOpened","Last Opened")}</div>
+      ${rows}
+    </div></div>`;
+}
+
+function viewMap(){
+  if (!DATA.tree) return viewPlaceholder("Storage Map", "Nothing scanned yet.");
+  if (!state.mapStack) state.mapStack = [DATA.tree];
+  const cur = state.mapStack[state.mapStack.length-1];
+
+  const crumbs = state.mapStack.map((n,i)=> i === state.mapStack.length-1
+    ? `<span style="color:var(--t1);font-weight:600">${esc(n.name)}</span>`
+    : `<span class="link" data-crumb="${i}">${esc(n.name)}</span>`
+  ).join('<span style="color:#3A4250"> › </span>');
+
+  if (cur.files && !cur.children) return mapFileList(cur, crumbs);
+
+  const kids = cur.children || [];
+  const seen = new Map();
+  kids.forEach(k=>{ if (!seen.has(k.category)) seen.set(k.category, k.color); });
+  const legend = [...seen].map(([cat,color])=>
+    `<span style="display:inline-flex;align-items:center;gap:8px;margin-right:16px;font-size:12px;color:var(--body)">
+      <span class="dot" style="background:${color}"></span>${esc(cat)}</span>`).join("");
+
+  const tiles = renderMapTiles(kids);
+  return `<div class="view">
+    <div style="font-size:13px;color:var(--t2);margin-bottom:10px">${crumbs}</div>
+    <div class="head-row">
+      <h1>${esc(cur.name)}</h1>
+      <div class="mono" style="font-size:13px;color:var(--t2);text-align:right;line-height:1.5">
+        ${fmtBytes(cur.bytes)}<br>${kids.length} folders</div>
+    </div>
+    <div style="margin:12px 0 16px">${legend}</div>
+    <div class="treemap" style="height:560px;min-height:560px;margin-top:0">
+      ${tiles || '<div class="empty">This folder has no sub-folders above the size threshold.</div>'}
+    </div></div>`;
+}
+
+function mapFileList(node, crumbs){
+  const rows = node.files.map(f=>`
+    <div class="tr trow" style="grid-template-columns:3fr 1fr">
+      <div class="fname">${esc(f.name)}</div>
+      <div class="tsz">${fmtBytes(f.bytes)}</div>
+    </div>`).join("");
+  const more = node.filesMore
+    ? `<div class="empty" style="padding:14px;font-size:12px">+ ${node.filesMore.count.toLocaleString()} more smaller files · ${fmtBytes(node.filesMore.bytes)}</div>` : "";
+  return `<div class="view">
+    <div style="font-size:13px;color:var(--t2);margin-bottom:10px">${crumbs}</div>
+    <div class="head-row"><h1>${esc(node.name)}</h1>
+      <div class="mono" style="font-size:13px;color:var(--t2);text-align:right;line-height:1.5">
+        ${fmtBytes(node.bytes)}<br>${node.files.length} files</div></div>
+    <div class="tbl" style="margin-top:16px">
+      <div class="tr thead" style="grid-template-columns:3fr 1fr"><span class="th">File</span><span class="th">Size</span></div>
+      ${rows || '<div class="empty">No files here.</div>'}
+    </div>${more}</div>`;
+}
+
+const fmtDays = d => d < 365 ? `${d} days` : `${(d/365).toFixed(1)} years`;
+
+function filterOld(threshold){
+  const cutoff = Date.now()/1000 - threshold*86400;
+  const items = DATA.oldFiles.files
+    .filter(f => f.lastOpened < cutoff)
+    .sort((a,b)=> a.lastOpened - b.lastOpened);  // oldest first
+  return { items, bytes: items.reduce((s,f)=>s+f.bytes, 0) };
+}
+
+function oldTable(items){
+  if (!items.length)
+    return `<div class="empty">Nothing untouched this long — try lowering the threshold.</div>`;
+  const cols = "grid-template-columns:2.4fr 1fr 1.2fr";
+  const folderIcon = c => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="${c}" stroke-width="1.8" style="vertical-align:-2px;margin-right:6px">
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
+  const rows = items.map(f=>{
+    const isFolder = f.type === "folder";
+    const name = isFolder ? folderIcon(f.color) + esc(f.name) : esc(f.name);
+    const sub = isFolder ? `${f.count.toLocaleString()} files · ${esc(f.path)}` : esc(f.path);
+    return `<div class="tr trow" style="${cols}">
+      <div><div class="fname">${name}</div><div class="fpath">${sub}</div></div>
+      <div class="tsz">${fmtBytes(f.bytes)}</div>
+      <div class="topened" style="color:var(--age)">${relTime(f.lastOpened)}</div>
+    </div>`;
+  }).join("");
+  const note = DATA.oldFiles.capped
+    ? `<div class="empty" style="padding:14px;font-size:12px">Showing the ${items.length} largest old files.</div>` : "";
+  return `<div class="tbl">
+    <div class="tr thead" style="${cols}">
+      <span class="th">Name</span><span class="th">Size</span><span class="th">Last Opened</span></div>
+    ${rows}</div>${note}`;
+}
+
+function viewOld(){
+  const th = state.oldThreshold;
+  const { items, bytes } = filterOld(th);
+  const presets = [[30,"30d"],[90,"90d"],[180,"180d"],[365,"1y"],[730,"2y"]];
+  const pills = presets.map(([d,l])=>
+    `<span class="pill" data-preset="${d}" style="cursor:pointer;${d===th?"background:var(--accent);color:#0A0D12":""}">${l}</span>`
+  ).join("");
+
+  return `<div class="view">
+    <h1>Old &amp; Unused</h1>
+    <div class="sub" id="oldSubtitle">${items.length} items · ${fmtBytes(bytes)} untouched for ${fmtDays(th)}+</div>
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="color:var(--t2);font-size:13px">Show items untouched for at least</span>
+        <span class="mono" id="oldThreshLabel" style="color:var(--accent);font-size:20px;font-weight:700">${fmtDays(th)}</span>
+      </div>
+      <input type="range" id="oldSlider" min="30" max="730" value="${th}"
+        style="width:100%;margin:18px 0 14px;accent-color:var(--accent)">
+      <div id="oldPills" style="display:flex;gap:8px">${pills}</div>
+    </div>
+    <div id="oldTableWrap">${oldTable(items)}</div></div>`;
+}
+
+function updateOldDynamic(){
+  const th = state.oldThreshold;
+  const { items, bytes } = filterOld(th);
+  const lbl = document.getElementById("oldThreshLabel");
+  const sub = document.getElementById("oldSubtitle");
+  const wrap = document.getElementById("oldTableWrap");
+  if (lbl) lbl.textContent = fmtDays(th);
+  if (sub) sub.textContent = `${items.length} items · ${fmtBytes(bytes)} untouched for ${fmtDays(th)}+`;
+  if (wrap) wrap.innerHTML = oldTable(items);
+  document.querySelectorAll("#oldPills [data-preset]").forEach(p=>{
+    const on = +p.dataset.preset === th;
+    p.style.background = on ? "var(--accent)" : "";
+    p.style.color = on ? "#0A0D12" : "";
+  });
+}
+
+function viewEmptyJunk(){
+  const ej = DATA.emptyJunk, c = ej.counts;
+  const total = c.folders + c.zero + c.junk;
+  const folderIcon = col => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="${col}" stroke-width="1.8" style="vertical-align:-2px;margin-right:6px">
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
+  const dot = col => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+    background:${col};margin-right:8px;vertical-align:1px"></span>`;
+
+  const section = (title, count, rowsHtml, colStyle, headHtml, shown) => {
+    if (!count) return "";
+    const cap = count > shown
+      ? `<div class="empty" style="padding:12px;font-size:12px">Showing ${shown.toLocaleString()} of ${count.toLocaleString()}.</div>` : "";
+    return `<div class="dup-section">${title} · ${count.toLocaleString()}</div>
+      <div class="tbl"><div class="tr thead" style="${colStyle}">${headHtml}</div>${rowsHtml}</div>${cap}`;
+  };
+
+  const folderRows = ej.emptyFolders.map(f=>`<div class="tr trow" style="grid-template-columns:1fr">
+    <div><div class="fname">${folderIcon('#F472B6')}${esc(f.name)}</div>
+    <div class="fpath">${esc(f.path)}</div></div></div>`).join("");
+  const zeroRows = ej.zeroByteFiles.map(f=>`<div class="tr trow" style="grid-template-columns:1fr">
+    <div><div class="fname">${dot(f.color)}${esc(f.name)}</div>
+    <div class="fpath">${esc(f.path)}</div></div></div>`).join("");
+  const junkRows = ej.junkFiles.map(f=>`<div class="tr trow" style="grid-template-columns:2.4fr 1fr">
+    <div><div class="fname">${dot(f.color)}${esc(f.name)}</div>
+    <div class="fpath">${esc(f.path)}</div></div>
+    <div class="tsz">${fmtBytes(f.bytes)}</div></div>`).join("");
+
+  const body =
+    section("Empty folders", c.folders, folderRows, "grid-template-columns:1fr",
+            `<span class="th">Folder</span>`, ej.emptyFolders.length) +
+    section("Zero-byte files", c.zero, zeroRows, "grid-template-columns:1fr",
+            `<span class="th">File</span>`, ej.zeroByteFiles.length) +
+    section("Junk files", c.junk, junkRows, "grid-template-columns:2.4fr 1fr",
+            `<span class="th">File</span><span class="th">Size</span>`, ej.junkFiles.length)
+    || `<div class="empty">No empty folders or junk files found — tidy.</div>`;
+
+  return `<div class="view">
+    <h1>Empty &amp; Junk</h1>
+    <div class="sub">${total.toLocaleString()} items · ${c.folders.toLocaleString()} empty folders, ${c.zero.toLocaleString()} zero-byte, ${c.junk.toLocaleString()} junk (${fmtBytes(ej.junkBytes)})</div>
+    <div style="color:var(--t3);font-size:12.5px;margin:4px 0 20px">Review-only — nothing is deleted. Folders holding skipped content (node_modules, .git) are excluded.</div>
+    ${body}</div>`;
+}
+
+function viewPlaceholder(title, note){
+  return `<div class="view"><h1>${title}</h1><div class="sub">${note}</div>
+    <div class="placeholder"><b>Coming next</b>This view is stubbed in the current build.</div></div>`;
+}
+
+function renderMain(){
+  const main = document.getElementById("main");
+  if (state.view==="overview") main.innerHTML = viewOverview();
+  else if (state.view==="dup") main.innerHTML = viewDuplicates();
+  else if (state.view==="large") main.innerHTML = viewLarge();
+  else if (state.view==="map") main.innerHTML = viewMap();
+  else if (state.view==="empty") main.innerHTML = viewEmptyJunk();
+  else main.innerHTML = viewOld();
+  renderStickyBar();
+}
+
+function renderStickyBar(){
+  document.getElementById("stickybar")?.remove();
+  if (state.view!=="dup" || state.selected.size===0) return;
+  let bytes=0;
+  state.selected.forEach(k=>{ const [si,ci]=k.split("__"); bytes += DATA.duplicates.sets[si].copies[ci].bytes; });
+  const bar=document.createElement("div");
+  bar.id="stickybar"; bar.className="stickybar";
+  bar.innerHTML=`<span class="mono" style="font-size:13px;color:var(--t2)">
+    <b style="color:var(--t1)">${state.selected.size}</b> files flagged · ${fmtBytes(bytes)}</span>
+    <button class="btn" id="exportBtn">Export review list</button>`;
+  document.body.appendChild(bar);
+}
+
+// ---- sidebar ----
+function renderNav(){
+  document.getElementById("nav").innerHTML = NAV.map(n=>`
+    <div class="nav-item ${n.id===state.view?"active":""}" data-view="${n.id}">
+      ${svg(n.icon)}<span>${n.label}</span></div>`).join("");
+
+  const g=document.getElementById("gauge"); const d=DATA;
+  if (d.disk){
+    const cap=d.disk.total;
+    const segs=d.categories.map(c=>`<span style="width:${c.bytes/cap*100}%;background:${c.color}"></span>`).join("")
+      + `<span style="flex:1;background:${'#232935'}"></span>`;
+    g.innerHTML=`<div class="gauge-row"><span>${fmtBytes(d.disk.used)} used</span><span>${fmtBytes(d.disk.free)} free</span></div>
+      <div class="gauge-bar">${segs}</div>`;
+  } else {
+    g.innerHTML=`<div class="gauge-row"><span>${fmtBytes(d.scannedTotal)} scanned</span></div>`;
+  }
+}
+
+// ---- events (delegated) ----
+document.addEventListener("click", e=>{
+  const nav=e.target.closest("[data-view]");
+  if (nav){ state.view=nav.dataset.view; renderNav(); renderMain(); return; }
+  const go=e.target.closest("[data-go]");
+  if (go){ state.view=go.dataset.go; renderNav(); renderMain(); return; }
+  const mapopen=e.target.closest("[data-mapopen]");
+  if (mapopen){ state.view="map"; state.mapStack=[DATA.tree];
+    const child = DATA.tree.children && DATA.tree.children[+mapopen.dataset.mapopen];
+    if (child) state.mapStack.push(child);
+    renderNav(); renderMain(); return; }
+  const sel=e.target.closest("[data-sel]");
+  if (sel){ const k=sel.dataset.sel; state.selected.has(k)?state.selected.delete(k):state.selected.add(k); renderMain(); return; }
+  const sort=e.target.closest("[data-sort]");
+  if (sort){ const k=sort.dataset.sort;
+    if (state.largeSort.key===k) state.largeSort.dir = state.largeSort.dir==="asc"?"desc":"asc";
+    else state.largeSort={key:k, dir:"desc"};
+    renderMain(); return; }
+  const drill=e.target.closest("[data-drill]");
+  if (drill){ const cur=state.mapStack[state.mapStack.length-1];
+    state.mapStack.push(cur.children[+drill.dataset.drill]); renderMain(); return; }
+  const crumb=e.target.closest("[data-crumb]");
+  if (crumb){ state.mapStack.length = +crumb.dataset.crumb + 1; renderMain(); return; }
+  const preset=e.target.closest("[data-preset]");
+  if (preset){ state.oldThreshold = +preset.dataset.preset; renderMain(); return; }
+  if (e.target.id==="exportBtn"){ exportReview(); }
+});
+document.addEventListener("input", e=>{
+  if (e.target.id==="dupSearch"){ state.dupSearch=e.target.value; const p=e.target.selectionStart; renderMain();
+    const el=document.getElementById("dupSearch"); if(el){el.focus();el.setSelectionRange(p,p);} }
+  if (e.target.id==="largeSearch"){ state.largeSearch=e.target.value; const p=e.target.selectionStart; renderMain();
+    const el=document.getElementById("largeSearch"); if(el){el.focus();el.setSelectionRange(p,p);} }
+  // Slider updates only the dynamic bits so the drag isn't interrupted by a re-render.
+  if (e.target.id==="oldSlider"){ state.oldThreshold=+e.target.value; updateOldDynamic(); }
+});
+
+function exportReview(){
+  const lines=["Strata — flagged duplicate copies (review only, nothing deleted)",""];
+  state.selected.forEach(k=>{ const [si,ci]=k.split("__");
+    const s=DATA.duplicates.sets[si]; const c=s.copies[ci];
+    lines.push(`${fmtBytes(c.bytes)}\t${c.path}`); });
+  const blob=new Blob([lines.join("\n")],{type:"text/plain"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="strata-review-list.txt"; a.click();
+}
+
+renderNav();
+renderMain();
+</script>
+</body>
+</html>

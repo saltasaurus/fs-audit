@@ -1,0 +1,8 @@
+# Scan roots — one directory path per line.
+# Copy this file to roots.txt (git-ignored) and edit that copy.
+# Use forward slashes on all platforms. WSL paths use /mnt/c/ style.
+# Lines starting with # are ignored; blank lines are ignored.
+
+C:/Users/YourName/Documents/
+# D:/Projects/
+# /mnt/c/Users/YourName/
