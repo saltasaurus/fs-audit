@@ -15,15 +15,40 @@ nothing ever leaves your machine.
 
 ## Install and run
 
-You need Python 3.11 or newer. That's the whole list.
+You need Python 3.11 or newer. That's the whole list — no `pip install`, no
+virtualenv, no dependencies.
 
 ```bash
 git clone https://github.com/saltasaurus/fs-audit.git
 cd fs-audit
-cp roots.example.txt roots.txt
+python strata ~/Documents ~/Pictures
 ```
 
-Open `roots.txt` and list the folders you want scanned, one per line:
+Pass the folders you want scanned. Strata writes `outputs/audit.html` and opens
+it in your browser. Re-run any time to refresh. A whole-profile scan takes a few
+minutes; most of that is hashing files that might be duplicates.
+
+### One file, no clone
+
+Build a self-contained bundle and run it anywhere:
+
+```bash
+python -m zipapp strata -o strata.pyz
+python strata.pyz ~/Documents
+```
+
+`strata.pyz` is a single file with everything inside it — the dashboard
+template included. Copy it to another machine, run it with any Python 3.11+,
+and it works. Nothing to install.
+
+### Scanning the same folders often
+
+Rather than retyping paths, list them in a `roots.txt` in the directory you run
+Strata from:
+
+```bash
+cp roots.example.txt roots.txt
+```
 
 ```
 C:/Users/YourName/Documents/
@@ -31,18 +56,18 @@ D:/Projects/
 /mnt/c/Users/YourName/          # WSL mount
 ```
 
-Use forward slashes on every platform. Blank lines and `#` comments are ignored.
-Then:
+Use forward slashes on every platform; blank lines and `#` comments are ignored.
+Then run with no arguments — `python strata` — and it picks the file up.
+Explicit arguments always win over the file.
 
-```bash
-python main.py
-```
+> `roots.txt` is git-ignored, so your folder paths never end up in a commit.
 
-Strata scans, writes `outputs/audit.html`, and opens it in your browser. Re-run
-any time to refresh. A whole-profile scan takes a few minutes; most of that is
-hashing files that might be duplicates.
+### Options
 
-> `roots.txt` is ignored by git, so your folder paths never end up in a commit.
+| Flag | Effect |
+|---|---|
+| `-o PATH`, `--output PATH` | Write the report somewhere else (default `outputs/audit.html`) |
+| `--no-open` | Write the report but don't launch a browser |
 
 ## What you get
 
@@ -111,8 +136,8 @@ Nothing acts on it but you.
 
 ## Optional tuning
 
-Everything below is optional — `config.py` has sensible defaults. The knobs
-worth knowing about:
+Everything below is optional — `strata/config.py` has sensible defaults. The
+knobs worth knowing about:
 
 | Setting | Default | What it does |
 |---|---|---|

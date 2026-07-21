@@ -4,7 +4,6 @@ import time
 
 import pytest
 
-import config
 import scanner
 
 
@@ -16,9 +15,7 @@ def _isolate_skip_paths(monkeypatch):
 
 
 def _configure(monkeypatch, root, **overrides):
-    """Point the scanner at a single temp root with default thresholds."""
-    monkeypatch.setattr(config, "SCAN_ROOTS", [str(root)])
-    monkeypatch.setattr(scanner, "SCAN_ROOTS", [str(root)])
+    """Override scanner thresholds for one test. Roots are passed to scan()."""
     for name, value in overrides.items():
         monkeypatch.setattr(scanner, name, value)
 
@@ -30,7 +27,7 @@ class TestDuplicates:
         (tmp_path / "IMG_1234.jpg").write_bytes(b"same pixels")
         (tmp_path / "photo.jpg").write_bytes(b"same pixels")
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["setCount"] == 1
         assert len(result["duplicates"]["sets"][0]["copies"]) == 2
@@ -41,7 +38,7 @@ class TestDuplicates:
         (tmp_path / "a.bin").write_bytes(b"AAAA")
         (tmp_path / "b.bin").write_bytes(b"BBBB")
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["setCount"] == 0
 
@@ -51,7 +48,7 @@ class TestDuplicates:
         for name in ("one.dat", "two.dat", "three.dat"):
             (tmp_path / name).write_bytes(b"x" * 100)
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["sets"][0]["wasted"] == 200
 
@@ -65,7 +62,7 @@ class TestDuplicateCap:
             (tmp_path / f"{name}1.dat").write_bytes(b"x" * size)
             (tmp_path / f"{name}2.dat").write_bytes(b"x" * size)
 
-        dup = scanner.scan()["duplicates"]
+        dup = scanner.scan([str(tmp_path)])["duplicates"]
 
         assert dup["setCount"] == 2          # true total
         assert dup["shown"] == 1             # only one inlined
@@ -87,7 +84,7 @@ class TestNearDuplicates:
         (tmp_path / "report_v1.md").write_text(self._draft(1))
         (tmp_path / "report_v2.md").write_text(self._draft(1, revised=True))
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["setCount"] == 0            # not byte-identical
         assert result["duplicates"]["near"]["setCount"] == 1
@@ -100,7 +97,7 @@ class TestNearDuplicates:
         (tmp_path / "a.md").write_text("\n".join(f"alpha {i} apples oranges" for i in range(200)))
         (tmp_path / "b.md").write_text("\n".join(f"zeta {i} database migration" for i in range(200)))
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["near"]["setCount"] == 0
 
@@ -111,7 +108,7 @@ class TestNearDuplicates:
         (tmp_path / "one.md").write_text(text)
         (tmp_path / "two.md").write_text(text)
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["setCount"] == 1
         assert result["duplicates"]["near"]["setCount"] == 0
@@ -122,7 +119,7 @@ class TestNearDuplicates:
         (tmp_path / "a.png").write_text(self._draft(1))
         (tmp_path / "b.png").write_text(self._draft(1, revised=True))
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["duplicates"]["near"]["setCount"] == 0
 
@@ -134,7 +131,7 @@ class TestEmptyJunk:
         (tmp_path / "a" / "b" / "c").mkdir(parents=True)
         (tmp_path / "keep.txt").write_bytes(b"x")  # keeps the root non-empty
 
-        ej = scanner.scan()["emptyJunk"]
+        ej = scanner.scan([str(tmp_path)])["emptyJunk"]
         paths = [f["path"] for f in ej["emptyFolders"]]
 
         assert ej["counts"]["folders"] == 1
@@ -145,7 +142,7 @@ class TestEmptyJunk:
         (tmp_path / "has").mkdir()
         (tmp_path / "has" / "f.txt").write_bytes(b"x")
 
-        ej = scanner.scan()["emptyJunk"]
+        ej = scanner.scan([str(tmp_path)])["emptyJunk"]
 
         assert ej["counts"]["folders"] == 0
 
@@ -157,7 +154,7 @@ class TestEmptyJunk:
         (tmp_path / "proj" / "node_modules" / "dep.js").write_bytes(b"x" * 10)
         (tmp_path / "keep.txt").write_bytes(b"x")
 
-        ej = scanner.scan()["emptyJunk"]
+        ej = scanner.scan([str(tmp_path)])["emptyJunk"]
         paths = [f["path"] for f in ej["emptyFolders"]]
 
         assert not any(p.endswith("proj") for p in paths)
@@ -168,7 +165,7 @@ class TestEmptyJunk:
         (tmp_path / "Thumbs.db").write_bytes(b"junk")   # junk-by-name
         (tmp_path / "real.txt").write_bytes(b"x")
 
-        ej = scanner.scan()["emptyJunk"]
+        ej = scanner.scan([str(tmp_path)])["emptyJunk"]
 
         assert ej["counts"]["zero"] == 1
         assert ej["zeroByteFiles"][0]["name"] == "empty.dat"
@@ -180,7 +177,7 @@ class TestEmptyJunk:
         _configure(monkeypatch, tmp_path)
         (tmp_path / "desktop.ini").write_bytes(b"")
 
-        ej = scanner.scan()["emptyJunk"]
+        ej = scanner.scan([str(tmp_path)])["emptyJunk"]
 
         assert ej["counts"]["junk"] == 1
         assert ej["counts"]["zero"] == 0
@@ -192,7 +189,7 @@ class TestLargeFiles:
         (tmp_path / "big.iso").write_bytes(b"x" * 1500)
         (tmp_path / "small.txt").write_bytes(b"x" * 10)
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["largeFiles"]["count"] == 1
         assert result["largeFiles"]["files"][0]["name"] == "big.iso"
@@ -203,7 +200,7 @@ class TestCategories:
         _configure(monkeypatch, tmp_path)
         (tmp_path / "clip.mp4").write_bytes(b"x" * 50)
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
         cats = {c["name"]: c for c in result["categories"]}
 
         assert "Videos" in cats
@@ -213,7 +210,7 @@ class TestCategories:
         _configure(monkeypatch, tmp_path)
         (tmp_path / "mystery.qzx").write_bytes(b"x" * 50)
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert any(c["name"] == "Other" for c in result["categories"])
 
@@ -227,7 +224,7 @@ class TestOldUnused:
         import os
         os.utime(f, (old, old))
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
 
         assert result["oldUnused"]["count"] == 1
 
@@ -243,7 +240,7 @@ class TestTree:
         (tmp_path / "sub" / "a.txt").write_bytes(b"x" * 100)
         (tmp_path / "sub" / "deep" / "b.txt").write_bytes(b"x" * 50)
 
-        tree = scanner.scan()["tree"]
+        tree = scanner.scan([str(tmp_path)])["tree"]
 
         assert tree["name"] == tmp_path.name  # single root, not "All roots"
         assert tree["bytes"] == 150
@@ -257,7 +254,7 @@ class TestTree:
         (tmp_path / "media" / "clip.mp4").write_bytes(b"x" * 900)
         (tmp_path / "media" / "note.txt").write_bytes(b"x" * 10)
 
-        tree = scanner.scan()["tree"]
+        tree = scanner.scan([str(tmp_path)])["tree"]
         media = _child(tree, "media")
 
         assert media["category"] == "Videos"
@@ -270,7 +267,7 @@ class TestTree:
         (tmp_path / "tiny").mkdir()
         (tmp_path / "tiny" / "t.bin").write_bytes(b"x" * 5)  # < 10% of total
 
-        tree = scanner.scan()["tree"]
+        tree = scanner.scan([str(tmp_path)])["tree"]
         names = [c["name"] for c in tree.get("children", [])]
 
         assert "big" in names
@@ -283,7 +280,7 @@ class TestTree:
         (tmp_path / "subdir" / "s.bin").write_bytes(b"x" * 5000)
         (tmp_path / "loose.bin").write_bytes(b"x" * 5000)  # loose file at the root
 
-        tree = scanner.scan()["tree"]
+        tree = scanner.scan([str(tmp_path)])["tree"]
         names = [c["name"] for c in tree["children"]]
 
         assert "subdir" in names
@@ -297,7 +294,7 @@ class TestTree:
         (tmp_path / "big.bin").write_bytes(b"x" * 9000)
         (tmp_path / "small.bin").write_bytes(b"x" * 1000)
 
-        tree = scanner.scan()["tree"]  # single leaf root → the tree is itself a file-leaf
+        tree = scanner.scan([str(tmp_path)])["tree"]  # single leaf root → the tree is itself a file-leaf
 
         assert "files" in tree
         assert [f["name"] for f in tree["files"]] == ["big.bin", "small.bin"]
@@ -308,7 +305,7 @@ class TestTree:
         for i in range(4):
             (tmp_path / f"f{i}.bin").write_bytes(b"x" * (100 + i))  # distinct sizes
 
-        tree = scanner.scan()["tree"]
+        tree = scanner.scan([str(tmp_path)])["tree"]
 
         assert len(tree["files"]) == 2
         assert tree["filesMore"]["count"] == 2
@@ -318,16 +315,14 @@ class TestTree:
         root_a.mkdir(); root_b.mkdir()
         (root_a / "f.txt").write_bytes(b"x" * 100)
         (root_b / "g.txt").write_bytes(b"x" * 100)
-        monkeypatch.setattr(scanner, "SCAN_ROOTS", [str(root_a), str(root_b)])
-
-        tree = scanner.scan()["tree"]
+        tree = scanner.scan([str(root_a), str(root_b)])["tree"]
 
         assert tree["name"] == "All roots"
         assert len(tree["children"]) == 2
 
     def test_empty_scan_yields_null_tree(self, tmp_path, monkeypatch):
         _configure(monkeypatch, tmp_path)
-        assert scanner.scan()["tree"] is None
+        assert scanner.scan([str(tmp_path)])["tree"] is None
 
 
 class TestOldFilesList:
@@ -339,7 +334,7 @@ class TestOldFilesList:
         long_ago = time.time() - 100 * 86400
         os.utime(old, (long_ago, long_ago))
 
-        files = scanner.scan()["oldFiles"]["files"]
+        files = scanner.scan([str(tmp_path)])["oldFiles"]["files"]
         names = [f["name"] for f in files]
 
         assert "stale.txt" in names
@@ -356,7 +351,7 @@ class TestOldFilesList:
             f = d / "f.txt"; f.write_bytes(b"x" * 40)
             os.utime(f, (long_ago, long_ago))
 
-        old = scanner.scan()["oldFiles"]
+        old = scanner.scan([str(tmp_path)])["oldFiles"]
         assert old["capped"] is True
         assert len(old["files"]) == 1
 
@@ -370,7 +365,7 @@ class TestOldCollapse:
             f = tmp_path / f"img_{i}.png"; f.write_bytes(b"x" * 40)
             os.utime(f, (long_ago, long_ago))
 
-        files = scanner.scan()["oldFiles"]["files"]
+        files = scanner.scan([str(tmp_path)])["oldFiles"]["files"]
 
         assert len(files) == 1
         assert files[0]["type"] == "folder"
@@ -386,7 +381,7 @@ class TestOldCollapse:
         os.utime(a, (now - 100 * 86400, now - 100 * 86400))
         os.utime(b, (now - 400 * 86400, now - 400 * 86400))  # different age bucket
 
-        files = scanner.scan()["oldFiles"]["files"]
+        files = scanner.scan([str(tmp_path)])["oldFiles"]["files"]
 
         assert len(files) == 2
         assert all(f["type"] == "file" for f in files)
@@ -398,9 +393,7 @@ class TestNestedRoots:
         (tmp_path / "sub").mkdir()
         (tmp_path / "sub" / "only.bin").write_bytes(b"x" * 100)
         # parent and its own child both listed as roots
-        monkeypatch.setattr(scanner, "SCAN_ROOTS", [str(tmp_path), str(tmp_path / "sub")])
-
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path), str(tmp_path / "sub")])
 
         assert result["scannedTotal"] == 100          # counted once, not 200
         assert result["duplicates"]["setCount"] == 0   # the file is not a duplicate of itself
@@ -415,7 +408,7 @@ class TestSkipPaths:
         (tmp_path / "node_modules" / "dep.js").write_bytes(b"x" * 10)
         (tmp_path / "app.js").write_bytes(b"x" * 10)
 
-        result = scanner.scan()
+        result = scanner.scan([str(tmp_path)])
         total = result["scannedTotal"]
 
         assert total == 10  # only app.js counted

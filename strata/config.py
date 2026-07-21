@@ -1,22 +1,22 @@
-# config.py — shipped tunables. The scan roots are NOT here: they're machine
-# data, so they live in roots.txt (git-ignored) and this file stays editable
-# without colliding with anyone's local paths. Copy roots.example.txt to start.
+# config.py — shipped tunables. Scan roots are NOT here: they're machine data.
+# Pass them on the command line, or list them in ./roots.txt (git-ignored) so
+# this file stays editable without colliding with anyone's local paths.
 
 import os
 
-_ROOTS_FILE = os.path.join(os.path.dirname(__file__), "roots.txt")
+# Resolved against the working directory, not this module: inside a .pyz bundle
+# there is no editable file next to the code.
+ROOTS_FILE: str = "roots.txt"
+DEFAULT_REPORT: str = "outputs/audit.html"
 
 
-def _load_roots() -> list[str]:
+def load_roots(path: str = ROOTS_FILE) -> list[str]:
     """One directory path per line; blank lines and #-comments ignored."""
-    if not os.path.exists(_ROOTS_FILE):
+    if not os.path.exists(path):
         return []
-    with open(_ROOTS_FILE, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         lines = (line.strip() for line in fh)
         return [line for line in lines if line and not line.startswith("#")]
-
-
-SCAN_ROOTS: list[str] = _load_roots()
 
 # Any path containing one of these substrings is never traversed.
 SKIP_PATHS: list[str] = [
@@ -89,4 +89,3 @@ JUNK_FILENAMES: set[str] = {"thumbs.db", "desktop.ini", ".ds_store"}
 # Each Empty & Junk list is capped to keep the inlined report payload bounded.
 EMPTY_JUNK_MAX: int = 1000
 
-REPORT_PATH: str = "outputs/audit.html"

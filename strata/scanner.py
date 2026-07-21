@@ -1,6 +1,6 @@
 """Single-pass, read-only filesystem scan feeding the Strata dashboard.
 
-One walk of SCAN_ROOTS collects everything the GUI shows: category totals, a
+One walk of the given roots collects everything the GUI shows: category totals, a
 drill-down folder tree, content-identical duplicate sets, large files, and the
 old/unused list. Nothing is moved, deleted, renamed, or modified.
 """
@@ -16,7 +16,7 @@ from collections import defaultdict
 
 import neardup
 from config import (
-    SCAN_ROOTS, SKIP_PATHS, CATEGORY_EXTENSIONS,
+    SKIP_PATHS, CATEGORY_EXTENSIONS,
     LARGE_FILE_BYTES, OLD_FILE_DAYS,
     OLD_LIST_FLOOR_DAYS, OLD_LIST_MAX, AGE_TOLERANCE_DAYS,
     MAP_MIN_FRACTION, MAP_MAX_CHILDREN, FILE_LIST_MAX,
@@ -67,11 +67,11 @@ def _sha256(path: str) -> str | None:
     return h.hexdigest()
 
 
-def _effective_roots() -> list[str]:
+def _effective_roots(roots: list[str]) -> list[str]:
     """Drop roots nested inside another root, so overlapping paths aren't walked
     twice (which would double-count sizes and fabricate self-duplicates)."""
     seen: dict[str, str] = {}
-    for r in SCAN_ROOTS:
+    for r in roots:
         seen.setdefault(os.path.normcase(os.path.abspath(r)), r)  # also dedupes exact repeats
     paths = list(seen)
     kept = []
@@ -83,8 +83,8 @@ def _effective_roots() -> list[str]:
     return kept
 
 
-def scan() -> dict:
-    """Walk the configured roots once and return the dashboard data dict."""
+def scan(roots: list[str]) -> dict:
+    """Walk the given roots once and return the dashboard data dict."""
     now = time.time()
     old_cutoff = now - OLD_FILE_DAYS * 86400
     list_cutoff = now - OLD_LIST_FLOOR_DAYS * 86400
@@ -110,7 +110,7 @@ def scan() -> dict:
     old_count = 0
     old_bytes = 0
     scanned = 0
-    roots = _effective_roots()
+    roots = _effective_roots(roots)
 
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
@@ -220,7 +220,9 @@ def scan() -> dict:
     ]
 
     try:
-        disk = shutil.disk_usage(_first_existing_root())
+        # Roots are validated before scan() is called, so the first one is real.
+        # disk_usage can still fail on odd mounts, hence the guard.
+        disk = shutil.disk_usage(roots[0])
         disk_info = {"total": disk.total, "used": disk.used, "free": disk.free}
     except (OSError, ValueError):
         disk_info = None
@@ -481,10 +483,3 @@ def _build_tree(
         "color": _color(dominant),
         "children": root_nodes,
     }
-
-
-def _first_existing_root() -> str:
-    for root in SCAN_ROOTS:
-        if os.path.exists(root):
-            return root
-    return SCAN_ROOTS[0]

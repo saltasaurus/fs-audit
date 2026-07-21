@@ -10,4 +10,6 @@ dev = ["pytest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+# strata/ is executed as a directory (python strata) or a zipapp, so its modules
+# are top-level in both. Put it on the path so tests import them the same way.
+pythonpath = ["strata"]
