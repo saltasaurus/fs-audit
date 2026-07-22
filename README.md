@@ -74,6 +74,11 @@ Explicit arguments always win over the file.
 |---|---|
 | `-o PATH`, `--output PATH` | Write the report somewhere else (default `outputs/audit.html`) |
 | `--no-open` | Write the report but don't launch a browser |
+| `-v`, `--verbose` | Name every file the scan couldn't read |
+
+If a scan ends by reporting files it couldn't read, they're almost always paths
+longer than Windows' 260-character limit — deep caches from game launchers and
+build tools are the usual source. Those files aren't counted in any total.
 
 ## What you get
 
