@@ -89,7 +89,7 @@ def _read_text(path: str, max_bytes: int) -> str | None:
         with open(path, "rb") as fh:
             raw = fh.read(max_bytes + 1)
     except OSError as exc:
-        logger.warning("near-dup read failed for '%s': %s", path, exc)
+        logger.debug("near-dup read failed for '%s': %s", path, exc)
         return None
     if len(raw) > max_bytes:
         return None  # over the cap → skip (don't truncate; partial text is misleading)

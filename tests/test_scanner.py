@@ -1,6 +1,7 @@
 """Tests for scanner.py. All paths are temporary (pytest tmp_path)."""
 
 import time
+import logging
 
 import pytest
 
@@ -412,3 +413,30 @@ class TestSkipPaths:
         total = result["scannedTotal"]
 
         assert total == 10  # only app.js counted
+
+
+class TestUnreadableFiles:
+    def test_unreadable_files_are_summarised_not_spammed(self, tmp_path, monkeypatch, caplog):
+        """Files the OS refuses (a path past Windows' 260-char limit, most often)
+        stay out of the totals and produce one summary line, not one line each."""
+        _configure(monkeypatch, tmp_path)
+        for i in range(5):
+            (tmp_path / f"deep_{i}.json").write_bytes(b"x" * 10)
+        (tmp_path / "fine.txt").write_bytes(b"y" * 7)
+
+        real_stat = scanner.os.stat
+
+        def refuse_json(path, *args, **kwargs):
+            if str(path).endswith(".json"):
+                raise OSError(3, "The system cannot find the path specified")
+            return real_stat(path, *args, **kwargs)
+
+        monkeypatch.setattr(scanner.os, "stat", refuse_json)
+
+        with caplog.at_level(logging.WARNING):
+            result = scanner.scan([str(tmp_path)])
+
+        assert result["scannedTotal"] == 7  # unreadable bytes are never guessed at
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "5 file(s)" in warnings[0].getMessage()

@@ -71,6 +71,17 @@ def _color(category: str) -> str:
     return CATEGORY_COLORS.get(category, CATEGORY_COLORS["Other"])
 
 
+# Files the OS refused to hand over. Collected rather than warned about
+# individually: the common cause is a path over the Windows 260-character limit,
+# and one deeply-nested cache directory yields hundreds of them in a row.
+_unreadable: list[str] = []
+
+
+def _unreadable_note(action: str, path: str, exc: OSError) -> None:
+    _unreadable.append(path)
+    logger.debug("%s failed for '%s': %s", action, path, exc)
+
+
 def _sha256(path: str) -> str | None:
     h = hashlib.sha256()
     try:
@@ -78,7 +89,7 @@ def _sha256(path: str) -> str | None:
             for chunk in iter(lambda: fh.read(1 << 16), b""):
                 h.update(chunk)
     except OSError as exc:
-        logger.warning("hash failed for '%s': %s", path, exc)
+        _unreadable_note("hash", path, exc)
         return None
     return h.hexdigest()
 
@@ -126,6 +137,7 @@ def scan(roots: list[str]) -> dict:
     old_count = 0
     old_bytes = 0
     scanned = 0
+    _unreadable.clear()
     roots = _effective_roots(roots)
 
     for root in roots:
@@ -152,7 +164,7 @@ def scan(roots: list[str]) -> dict:
                 try:
                     st = os.stat(path, follow_symlinks=False)
                 except OSError as exc:
-                    logger.warning("stat failed for '%s': %s", path, exc)
+                    _unreadable_note("stat", path, exc)
                     continue
 
                 scanned += 1
@@ -214,6 +226,11 @@ def scan(roots: list[str]) -> dict:
     near_dupes = neardup.find_near_duplicates(
         near_candidates, path_meta, NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, path_hash)
     _progress(f"near-duplicate scan complete - {len(near_dupes):,} sets found.", final=True)
+    if _unreadable:
+        logger.warning(
+            "%d file(s) could not be read and are missing from these totals: "
+            "usually a path past the Windows 260-character limit, sometimes "
+            "permissions. Re-run with --verbose to list them.", len(_unreadable))
     large_files.sort(key=lambda f: f["bytes"], reverse=True)
 
     scanned_total = sum(category_bytes.values())

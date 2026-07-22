@@ -48,6 +48,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help=f"where to write the report (default: {DEFAULT_REPORT})")
     parser.add_argument("--no-open", action="store_true",
                         help="write the report but don't open a browser")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="name every file the scan could not read")
     return parser.parse_args(argv)
 
 
@@ -72,7 +74,8 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit("Error: not an existing directory:\n"
                  + "".join(f"    {r}\n" for r in missing))
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
     logging.info("scanning %d root(s)...", len(roots))
     data = scanner.scan(roots)
 
@@ -85,7 +88,8 @@ def main(argv: list[str] | None = None) -> None:
     ej = data["emptyJunk"]["counts"]
     logging.info(
         "found %d duplicate set(s), %d near-duplicate set(s), %d large file(s), "
-        "%d empty folder(s), %d junk/zero-byte file(s) — report at %s",
+        # ASCII only: the Windows console is cp1252 and turns an em dash into '?'.
+        "%d empty folder(s), %d junk/zero-byte file(s) - report at %s",
         data["duplicates"]["setCount"], data["duplicates"]["near"]["setCount"],
         data["largeFiles"]["count"], ej["folders"], ej["zero"] + ej["junk"], args.output,
     )
