@@ -30,16 +30,22 @@ minutes; most of that is hashing files that might be duplicates.
 
 ### One file, no clone
 
-Build a self-contained bundle and run it anywhere:
+Download [**strata.pyz**](https://github.com/saltasaurus/fs-audit/releases/latest/download/strata.pyz)
+from the latest release and run it:
 
 ```bash
-python -m zipapp strata -o strata.pyz
 python strata.pyz ~/Documents
 ```
 
-`strata.pyz` is a single file with everything inside it — the dashboard
-template included. Copy it to another machine, run it with any Python 3.11+,
-and it works. Nothing to install.
+One file with everything inside it, dashboard template included. The same file
+works on Windows, macOS, and Linux — anywhere Python 3.11 or newer runs. There
+is nothing to install and nothing to unpack.
+
+Or build it yourself from a clone:
+
+```bash
+python -m zipapp strata -o strata.pyz
+```
 
 ### Scanning the same folders often
 
