@@ -427,14 +427,25 @@ class TestUnreadableFiles:
             (tmp_path / f"deep_{i}.json").write_bytes(b"x" * 10)
         (tmp_path / "fine.txt").write_bytes(b"y" * 7)
 
-        real_stat = scanner.os.stat
+        class Refusing:
+            """A directory entry the OS will not stat — what a path past the
+            length limit looks like from inside the walk."""
 
-        def refuse_json(path, *args, **kwargs):
-            if str(path).endswith(".json"):
+            def __init__(self, entry):
+                self.path, self.name = entry.path, entry.name
+
+            def stat(self, **kwargs):
                 raise OSError(3, "The system cannot find the path specified")
-            return real_stat(path, *args, **kwargs)
 
-        monkeypatch.setattr(scanner.os, "stat", refuse_json)
+        real_walk = scanner._walk_dirs
+
+        def refuse_json(root):
+            for dirpath, subdirs, files, hidden in real_walk(root):
+                yield dirpath, subdirs, [
+                    Refusing(e) if e.name.endswith(".json") else e for e in files
+                ], hidden
+
+        monkeypatch.setattr(scanner, "_walk_dirs", refuse_json)
 
         with caplog.at_level(logging.WARNING):
             result = scanner.scan([str(tmp_path)])
