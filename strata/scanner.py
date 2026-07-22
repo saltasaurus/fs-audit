@@ -16,7 +16,7 @@ from collections import defaultdict
 
 import neardup
 from config import (
-    SKIP_PATHS, CATEGORY_EXTENSIONS, LARGE_FILE_BYTES, OLD_FILE_DAYS,
+    SKIP_PATHS, CATEGORY_EXTENSIONS, LARGE_FILE_BYTES, OLD_FILE_DAYS, DUP_MIN_BYTES,
     NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, NEAR_DUP_EXTENSIONS, JUNK_FILENAMES,
 )
 
@@ -312,12 +312,14 @@ def _find_duplicates(
     """
     hash_to_paths: dict[str, list[str]] = defaultdict(list)
     path_hash: dict[str, str] = {}
-    total = sum(len(p) for p in size_to_paths.values() if len(p) >= 2)
+    # A unique size cannot have a twin, and anything under DUP_MIN_BYTES is not
+    # worth the open() it would cost to prove it.
+    candidates = {size: paths for size, paths in size_to_paths.items()
+                  if len(paths) >= 2 and size >= DUP_MIN_BYTES}
+    total = sum(len(paths) for paths in candidates.values())
     done = 0
 
-    for size, paths in size_to_paths.items():
-        if len(paths) < 2:
-            continue  # a unique size cannot be a duplicate — skip the hashing
+    for size, paths in candidates.items():
         for path in paths:
             digest = _sha256(path)
             done += 1

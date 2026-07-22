@@ -13,6 +13,9 @@ def _isolate_skip_paths(monkeypatch):
     # pytest's tmp_path lives under AppData, which the real SKIP_PATHS excludes;
     # clear it so tests aren't skipped. Tests that need skips set their own.
     monkeypatch.setattr(scanner, "SKIP_PATHS", [])
+    # Fixtures are a few bytes each, well under the shipped DUP_MIN_BYTES floor.
+    # TestDuplicateFloor covers the floor itself.
+    monkeypatch.setattr(scanner, "DUP_MIN_BYTES", 0)
 
 
 def _configure(monkeypatch, root, **overrides):
@@ -440,3 +443,20 @@ class TestUnreadableFiles:
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
         assert "5 file(s)" in warnings[0].getMessage()
+
+
+class TestDuplicateFloor:
+    def test_files_below_the_floor_are_not_hashed(self, tmp_path, monkeypatch):
+        """Identical files under DUP_MIN_BYTES are ignored: proving they match
+        costs an open() each, and the space they could reclaim is negligible."""
+        _configure(monkeypatch, tmp_path, DUP_MIN_BYTES=1024)
+        (tmp_path / "tiny_a.cfg").write_bytes(b"x" * 100)
+        (tmp_path / "tiny_b.cfg").write_bytes(b"x" * 100)
+        (tmp_path / "big_a.bin").write_bytes(b"y" * 4096)
+        (tmp_path / "big_b.bin").write_bytes(b"y" * 4096)
+
+        result = scanner.scan([str(tmp_path)])
+
+        assert result["duplicates"]["setCount"] == 1  # only the pair above the floor
+        assert result["duplicates"]["sets"][0]["name"] == "big_a.bin"
+        assert result["scannedTotal"] == 8392  # every file still counts toward totals

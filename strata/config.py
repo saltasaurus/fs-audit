@@ -46,6 +46,13 @@ CATEGORY_EXTENSIONS: dict[str, list[str]] = {
     "System":    ["dll", "sys", "so", "dylib", "ini", "cfg", "log"],
 }
 
+# Files below this size are not checked for duplicates. Hashing is dominated by
+# per-file opens rather than bytes, and tiny files collide on size constantly —
+# on a 300k-file profile the sub-4KB ones were 64% of all candidates and ~140s of
+# work, while together they could hide at most ~200 MB of waste. Set 0 to hash
+# everything; raise it if you only care about duplicates that free real space.
+DUP_MIN_BYTES: int = 4096
+
 # Near-duplicates: text files whose content is similar but not identical (drafts,
 # edited copies). Files scoring at/above this Jaccard estimate group together.
 # 0.8 = "basically the same"; lower toward 0.6 for looser "related drafts".
