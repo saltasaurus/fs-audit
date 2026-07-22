@@ -54,7 +54,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
 
-    roots = args.roots or load_roots()
+    # `strata "C:\Users\Me\"` — the trailing backslash escapes the closing quote,
+    # so Windows hands us a path ending in a stray `"`. Tab-completion appends
+    # that backslash, so this is the common case, not the exotic one. A quote is
+    # never legal in a Windows path, so stripping it can't discard a real one.
+    roots = [r.rstrip('"') for r in (args.roots or load_roots())]
     if not roots:
         sys.exit(
             "Error: no directories to scan.\n"
