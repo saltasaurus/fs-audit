@@ -58,15 +58,21 @@ DUP_MIN_BYTES: int = 4096
 # 0.8 = "basically the same"; lower toward 0.6 for looser "related drafts".
 NEAR_DUP_THRESHOLD: float = 0.8
 
-# Only these extensions are compared for near-duplicates (plain-text formats we
-# can shingle directly — binary docs like .docx/.pdf would need extraction).
+# Only these extensions are compared for near-duplicates: prose a person edits by
+# hand, where "similar but not identical" means a draft or a saved-off copy worth
+# reviewing. Code was deliberately dropped — near-identical source is normal (every
+# component looks alike, generators repeat by design), so flagging it is noise, and
+# on a dev machine it's ~90% of the shingling cost for the least useful result.
+# Add an extension back if you genuinely want to dedupe it. Exact byte-for-byte
+# duplicates are found for ALL file types regardless; this only tunes the fuzzy pass.
+#
+# TODO: duplicated libraries / cloned repos want a separate directory-level pass
+# (fingerprint a folder by its file hashes, not its text) — a future update, not
+# something to solve by widening this list back out to source extensions.
+#
 # Files above NEAR_DUP_MAX_BYTES are skipped (near-dup on huge text is rare/slow).
 NEAR_DUP_MAX_BYTES: int = 5 * 1024 ** 2   # 5 MB
-NEAR_DUP_EXTENSIONS: set[str] = {
-    "txt", "md", "csv", "rtf", "tex", "org", "rst", "log",
-    "py", "js", "ts", "tsx", "jsx", "c", "cpp", "h", "hpp", "java", "go",
-    "rs", "rb", "gd", "json", "yaml", "yml", "toml", "sh", "html", "css", "sql",
-}
+NEAR_DUP_EXTENSIONS: set[str] = {"txt", "md", "rtf", "tex", "org", "rst", "csv"}
 
 # Empty & Junk view. OS clutter matched by exact filename (case-insensitive).
 JUNK_FILENAMES: set[str] = {"thumbs.db", "desktop.ini", ".ds_store"}
