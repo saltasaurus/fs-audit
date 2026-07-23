@@ -102,24 +102,32 @@ def find_near_duplicates(
     threshold: float,
     max_bytes: int,
     path_hash: dict[str, str] | None = None,
+    progress=None,
 ) -> list[dict]:
     """Group near-identical text files.
 
     `paths` are the candidate text files, `path_meta` maps path → (category,
     size, mtime), `path_hash` maps path → sha256 for files that were exact-hashed
-    (used to drop byte-identical edges). Returns groups sorted by similarity, each
+    (used to drop byte-identical edges). `progress`, if given, is called with a
+    status string as fingerprinting proceeds — this is the scan's slowest phase, so
+    it must not look hung. Returns groups sorted by similarity, each
     {name, category, color, similarity, members:[{path, bytes, mtime}]}.
     """
     path_hash = path_hash or {}
+    total = len(paths)
 
     signatures: dict[str, list[int]] = {}
-    for path in paths:
+    for i, path in enumerate(paths, start=1):
+        if progress and i % 200 == 0:
+            progress(f"fingerprinting text files: {i:,}/{total:,}...")
         text = _read_text(path, max_bytes)
         if text is None:
             continue
         bases = _shingle_hashes(text)
         if bases:
             signatures[path] = _signature(bases)
+    if progress and total:
+        progress(f"comparing {len(signatures):,} text files...")
 
     # Banded LSH: files sharing a full band land in the same bucket → candidates.
     buckets: dict[tuple, list[str]] = defaultdict(list)

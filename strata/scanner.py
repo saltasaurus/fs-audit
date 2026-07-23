@@ -256,7 +256,8 @@ def scan(roots: list[str]) -> dict:
     duplicates, path_hash = _find_duplicates(size_to_paths, path_meta)
     _progress(f"duplicate scan complete - {len(duplicates):,} sets found.", final=True)
     near_dupes = neardup.find_near_duplicates(
-        near_candidates, path_meta, NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, path_hash)
+        near_candidates, path_meta, NEAR_DUP_THRESHOLD, NEAR_DUP_MAX_BYTES, path_hash,
+        progress=_progress)
     _progress(f"near-duplicate scan complete - {len(near_dupes):,} sets found.", final=True)
     if _unreadable:
         logger.warning(
